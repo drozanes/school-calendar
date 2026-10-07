@@ -81,7 +81,9 @@ export default function CalendarApp() {
   const filteredEvents = events.filter((evt) => {
     // 1. Check Track
     if (selectedTrack !== "הכל") {
-      if (evt.track !== "כללי" && evt.track !== selectedTrack) {
+      // If it has "כללי", it applies to everyone. 
+      // Otherwise, it MUST explicitly include the selected track.
+      if (!evt.tracks.includes("כללי") && !evt.tracks.includes(selectedTrack as any)) {
         return false;
       }
     }

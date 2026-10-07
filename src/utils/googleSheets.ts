@@ -11,7 +11,7 @@ export interface ScheduleEvent {
   type: "מבחן" | "אירוע";
   text: string;
   specificClasses: number[]; // Empty means it applies to all classes in the grade
-  track: Track;
+  tracks: Track[];
 }
 
 const SHEET_URL =
@@ -37,12 +37,36 @@ const extractClasses = (text: string): number[] => {
   return Array.from(classes);
 };
 
-const determineTrack = (text: string, isCol12: boolean = false): Track => {
-  if (isCol12) return "תורת עציון";
-  if (text.includes('פנמצ') || text.includes('פנמ"צ')) return "פנמצ";
-  if (text.includes('תוצ') || text.includes('תורת עציון')) return "תורת עציון";
-  if (text.includes('אוע') || text.includes('אור עציון') || text.includes('ישיבה') || text.includes('פנימיה')) return "אור עציון";
-  return "כללי"; // If no specific keyword, applies to all tracks
+const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
+  if (isCol12) return ["תורת עציון"];
+  
+  const tracks = new Set<Track>();
+  
+  if (text.includes('תוצ') || text.includes('תורת עציון')) {
+    tracks.add("תורת עציון");
+  }
+  
+  // "אור עציון כולל גם את הפנמצ" - if explicitly "אור עציון" or "אוע", it applies to both
+  if (text.includes('אור עציון') || text.includes('אוע') || text.includes('או"ע') || text.includes('או״ע')) {
+    tracks.add("אור עציון");
+    tracks.add("פנמצ");
+  }
+  
+  // If it just says פנימיה (or ישיבה), it is ONLY for אור עציון, not פנמצ
+  if (text.includes('פנימיה') || text.includes('ישיבה')) {
+    tracks.add("אור עציון");
+  }
+
+  // If it specifically mentions פנמצ, add it
+  if (text.includes('פנמצ') || text.includes('פנמ"צ') || text.includes('פנמ״צ')) {
+    tracks.add("פנמצ");
+  }
+
+  if (tracks.size === 0) {
+    return ["כללי"]; // If no specific keyword, applies to all tracks
+  }
+  
+  return Array.from(tracks);
 };
 
 export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
@@ -80,7 +104,7 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
       const lines = text.split(/\n|\.\s+/).map((l) => l.trim()).filter(Boolean);
       for (const line of lines) {
         const specificClasses = grade !== "כללי" ? extractClasses(line) : [];
-        const track = determineTrack(line, isCol12);
+        const tracks = determineTracks(line, isCol12);
         
         events.push({
           id: `evt-${eventIdCounter++}`,
@@ -91,7 +115,7 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
           type,
           text: line,
           specificClasses,
-          track,
+          tracks,
         });
       }
     };
