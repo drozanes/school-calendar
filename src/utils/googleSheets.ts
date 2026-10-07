@@ -1,5 +1,7 @@
 import { parse } from "csv-parse/sync";
 
+export type Track = "פנמצ" | "תורת עציון" | "אור עציון" | "כללי";
+
 export interface ScheduleEvent {
   id: string;
   date: string; // YYYY-MM-DD
@@ -9,6 +11,7 @@ export interface ScheduleEvent {
   type: "מבחן" | "אירוע";
   text: string;
   specificClasses: number[]; // Empty means it applies to all classes in the grade
+  track: Track;
 }
 
 const SHEET_URL =
@@ -32,6 +35,14 @@ const extractClasses = (text: string): number[] => {
     classes.add(parseInt(match[1]));
   }
   return Array.from(classes);
+};
+
+const determineTrack = (text: string, isCol12: boolean = false): Track => {
+  if (isCol12) return "תורת עציון";
+  if (text.includes('פנמצ') || text.includes('פנמ"צ')) return "פנמצ";
+  if (text.includes('תוצ') || text.includes('תורת עציון')) return "תורת עציון";
+  if (text.includes('אוע') || text.includes('אור עציון') || text.includes('ישיבה') || text.includes('פנימיה')) return "אור עציון";
+  return "כללי"; // If no specific keyword, applies to all tracks
 };
 
 export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
@@ -61,13 +72,16 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
     const processCell = (
       text: string,
       grade: "ט" | "י" | "יא" | "יב" | "כללי",
-      type: "מבחן" | "אירוע"
+      type: "מבחן" | "אירוע",
+      isCol12: boolean = false
     ) => {
       if (!text) return;
       // Split by newlines or periods followed by whitespace to separate multiple events in one cell
       const lines = text.split(/\n|\.\s+/).map((l) => l.trim()).filter(Boolean);
       for (const line of lines) {
         const specificClasses = grade !== "כללי" ? extractClasses(line) : [];
+        const track = determineTrack(line, isCol12);
+        
         events.push({
           id: `evt-${eventIdCounter++}`,
           date,
@@ -77,6 +91,7 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
           type,
           text: line,
           specificClasses,
+          track,
         });
       }
     };
@@ -109,6 +124,12 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
       processCell(ev10, "י", "אירוע");
       processCell(ev11, "יא", "אירוע");
       processCell(ev12, "יב", "אירוע");
+    }
+    
+    // תורת עציון (Column 12)
+    const toratEtzion = row[12]?.trim();
+    if (toratEtzion) {
+      processCell(toratEtzion, "כללי", "אירוע", true);
     }
   }
 

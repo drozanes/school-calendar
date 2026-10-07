@@ -22,6 +22,7 @@ import type { ScheduleEvent } from "@/utils/googleSheets";
 
 const GRADES = ["ט", "י", "יא", "יב"];
 const CLASSES = [1, 2, 3, 4, 5, 6];
+const TRACKS = ["הכל", "אור עציון", "פנמצ", "תורת עציון"];
 
 export default function CalendarApp() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
@@ -29,6 +30,7 @@ export default function CalendarApp() {
   
   const [selectedGrade, setSelectedGrade] = useState<string>("ט");
   const [selectedClass, setSelectedClass] = useState<number>(1);
+  const [selectedTrack, setSelectedTrack] = useState<string>("הכל");
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
 
@@ -41,9 +43,11 @@ export default function CalendarApp() {
   useEffect(() => {
     const savedGrade = localStorage.getItem("cal_grade");
     const savedClass = localStorage.getItem("cal_class");
+    const savedTrack = localStorage.getItem("cal_track");
     const savedView = localStorage.getItem("cal_view") as "month" | "week";
     if (savedGrade) setSelectedGrade(savedGrade);
     if (savedClass) setSelectedClass(Number(savedClass));
+    if (savedTrack) setSelectedTrack(savedTrack);
     if (savedView) setViewMode(savedView);
   }, []);
 
@@ -51,8 +55,9 @@ export default function CalendarApp() {
   useEffect(() => {
     localStorage.setItem("cal_grade", selectedGrade);
     localStorage.setItem("cal_class", selectedClass.toString());
+    localStorage.setItem("cal_track", selectedTrack);
     localStorage.setItem("cal_view", viewMode);
-  }, [selectedGrade, selectedClass, viewMode]);
+  }, [selectedGrade, selectedClass, selectedTrack, viewMode]);
 
   // Fetch data
   useEffect(() => {
@@ -74,6 +79,14 @@ export default function CalendarApp() {
 
   // Filtering logic
   const filteredEvents = events.filter((evt) => {
+    // 1. Check Track
+    if (selectedTrack !== "הכל") {
+      if (evt.track !== "כללי" && evt.track !== selectedTrack) {
+        return false;
+      }
+    }
+
+    // 2. Check Grade & Class
     if (evt.grade === "כללי") return true;
     if (evt.grade !== selectedGrade) return false;
     
@@ -158,6 +171,16 @@ export default function CalendarApp() {
               onChange={e => setSelectedClass(Number(e.target.value))}
             >
               {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 font-medium text-gray-700">
+            מסלול:
+            <select 
+              className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              value={selectedTrack} 
+              onChange={e => setSelectedTrack(e.target.value)}
+            >
+              {TRACKS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
         </div>
