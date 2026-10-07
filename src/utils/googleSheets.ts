@@ -42,7 +42,7 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
   
   const tracks = new Set<Track>();
   
-  if (text.includes('תוצ') || text.includes('תורת עציון')) {
+  if (text.includes('תוצ') || text.includes('תו"צ') || text.includes('תו״צ') || text.includes('תורת עציון')) {
     tracks.add("תורת עציון");
   }
   
