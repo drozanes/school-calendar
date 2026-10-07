@@ -191,7 +191,7 @@ export default function CalendarApp() {
       {/* Calendar Navigation */}
       <div className="flex justify-between items-center mb-6 px-2">
         <button 
-          onClick={goNext}
+          onClick={goPrev}
           className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronRight size={24} />
@@ -204,7 +204,7 @@ export default function CalendarApp() {
           )}
         </h2>
         <button 
-          onClick={goPrev}
+          onClick={goNext}
           className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronLeft size={24} />
