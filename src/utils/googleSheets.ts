@@ -23,15 +23,15 @@ const parseDateStr = (dateStr: string): string | null => {
   return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
 };
 
-const extractClasses = (text: string, grade: string): number[] => {
-  const classes: number[] = [];
-  // Match the grade followed by optional quotes/geresh and space, then a number 1-6 (e.g., "ט2", "יב 1", "י'2")
-  const regex = new RegExp(`${grade}['"״]?\\s*([1-6])`, "g");
+const extractClasses = (text: string): number[] => {
+  const classes = new Set<number>();
+  // Match any isolated digit from 1-6
+  const regex = /(?<!\d)([1-6])(?!\d)/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
-    classes.push(parseInt(match[1]));
+    classes.add(parseInt(match[1]));
   }
-  return classes;
+  return Array.from(classes);
 };
 
 export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
@@ -64,10 +64,10 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
       type: "מבחן" | "אירוע"
     ) => {
       if (!text) return;
-      // Split by newlines so multiple events in one cell become distinct events
-      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      // Split by newlines or periods followed by whitespace to separate multiple events in one cell
+      const lines = text.split(/\n|\.\s+/).map((l) => l.trim()).filter(Boolean);
       for (const line of lines) {
-        const specificClasses = grade !== "כללי" ? extractClasses(line, grade) : [];
+        const specificClasses = grade !== "כללי" ? extractClasses(line) : [];
         events.push({
           id: `evt-${eventIdCounter++}`,
           date,
