@@ -82,16 +82,34 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
     };
 
     // Tests (מבחנים)
-    processCell(row[3], "ט", "מבחן");
-    processCell(row[4], "י", "מבחן");
-    processCell(row[5], "יא", "מבחן");
-    processCell(row[6], "יב", "מבחן");
+    const test9 = row[3]?.trim();
+    const test10 = row[4]?.trim();
+    const test11 = row[5]?.trim();
+    const test12 = row[6]?.trim();
+
+    if (test9 && !test10 && !test11 && !test12 && !/(?:^|\s)ט['"״]?(?:\s*[1-6]|\s|$)/.test(test9)) {
+      processCell(test9, "כללי", "מבחן");
+    } else {
+      processCell(test9, "ט", "מבחן");
+      processCell(test10, "י", "מבחן");
+      processCell(test11, "יא", "מבחן");
+      processCell(test12, "יב", "מבחן");
+    }
 
     // Events (אירועים)
-    processCell(row[8], "ט", "אירוע");
-    processCell(row[9], "י", "אירוע");
-    processCell(row[10], "יא", "אירוע");
-    processCell(row[11], "יב", "אירוע");
+    const ev9 = row[8]?.trim();
+    const ev10 = row[9]?.trim();
+    const ev11 = row[10]?.trim();
+    const ev12 = row[11]?.trim();
+
+    if (ev9 && !ev10 && !ev11 && !ev12 && !/(?:^|\s)ט['"״]?(?:\s*[1-6]|\s|$)/.test(ev9)) {
+      processCell(ev9, "כללי", "אירוע");
+    } else {
+      processCell(ev9, "ט", "אירוע");
+      processCell(ev10, "י", "אירוע");
+      processCell(ev11, "יא", "אירוע");
+      processCell(ev12, "יב", "אירוע");
+    }
   }
 
   return events;
