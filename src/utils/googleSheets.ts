@@ -52,8 +52,8 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
     tracks.add("פנמצ");
   }
   
-  // If it just says פנימיה (or ישיבה), it is ONLY for אור עציון, not פנמצ
-  if (text.includes('פנימיה') || text.includes('ישיבה')) {
+  // If it just says פנימיה, it is ONLY for אור עציון, not פנמצ
+  if (text.includes('פנימיה')) {
     tracks.add("אור עציון");
   }
 
