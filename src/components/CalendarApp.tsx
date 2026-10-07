@@ -5,6 +5,8 @@ import {
   format, 
   addMonths, 
   subMonths, 
+  addWeeks,
+  subWeeks,
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
@@ -28,6 +30,7 @@ export default function CalendarApp() {
   const [selectedGrade, setSelectedGrade] = useState<string>("ט");
   const [selectedClass, setSelectedClass] = useState<number>(1);
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
 
   // Initialize date on mount (fixes prerender error)
   useEffect(() => {
@@ -38,15 +41,18 @@ export default function CalendarApp() {
   useEffect(() => {
     const savedGrade = localStorage.getItem("cal_grade");
     const savedClass = localStorage.getItem("cal_class");
+    const savedView = localStorage.getItem("cal_view") as "month" | "week";
     if (savedGrade) setSelectedGrade(savedGrade);
     if (savedClass) setSelectedClass(Number(savedClass));
+    if (savedView) setViewMode(savedView);
   }, []);
 
   // Save preferences when changed
   useEffect(() => {
     localStorage.setItem("cal_grade", selectedGrade);
     localStorage.setItem("cal_class", selectedClass.toString());
-  }, [selectedGrade, selectedClass]);
+    localStorage.setItem("cal_view", viewMode);
+  }, [selectedGrade, selectedClass, viewMode]);
 
   // Fetch data
   useEffect(() => {
@@ -80,15 +86,26 @@ export default function CalendarApp() {
 
   if (!currentDate) return null;
 
-  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
-  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const goNext = () => {
+    setCurrentDate(viewMode === "month" ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
+  };
+  
+  const goPrev = () => {
+    setCurrentDate(viewMode === "month" ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));
+  };
 
   // Calendar Grid generation
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
+  
   // Israeli week starts on Sunday (0)
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
-  const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const startDate = viewMode === "month" 
+    ? startOfWeek(monthStart, { weekStartsOn: 0 }) 
+    : startOfWeek(currentDate, { weekStartsOn: 0 });
+    
+  const endDate = viewMode === "month" 
+    ? endOfWeek(monthEnd, { weekStartsOn: 0 })
+    : endOfWeek(currentDate, { weekStartsOn: 0 });
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
   const today = new Date();
@@ -96,8 +113,8 @@ export default function CalendarApp() {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-6 border border-gray-100">
-        <div className="flex items-center gap-4 mb-4 md:mb-0">
+      <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-6 border border-gray-100 gap-4">
+        <div className="flex items-center gap-4">
           <div className="bg-blue-100 p-3 rounded-full text-blue-600">
             <CalendarIcon size={24} />
           </div>
@@ -107,7 +124,22 @@ export default function CalendarApp() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
+        <div className="flex flex-wrap justify-center gap-4 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
+          <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <button 
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === "month" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+              onClick={() => setViewMode("month")}
+            >
+              חודש
+            </button>
+            <button 
+              className={`px-4 py-1.5 text-sm font-medium border-r border-gray-300 transition-colors ${viewMode === "week" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+              onClick={() => setViewMode("week")}
+            >
+              שבוע
+            </button>
+          </div>
+
           <label className="flex items-center gap-2 font-medium text-gray-700">
             שכבה:
             <select 
@@ -134,16 +166,20 @@ export default function CalendarApp() {
       {/* Calendar Navigation */}
       <div className="flex justify-between items-center mb-6 px-2">
         <button 
-          onClick={nextMonth}
+          onClick={goNext}
           className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronRight size={24} />
         </button>
-        <h2 className="text-2xl font-bold text-gray-800 capitalize">
-          {format(currentDate, "MMMM yyyy", { locale: he })}
+        <h2 className="text-2xl font-bold text-gray-800 capitalize text-center">
+          {viewMode === "month" ? (
+            format(currentDate, "MMMM yyyy", { locale: he })
+          ) : (
+            `${format(startDate, "d MMMM", { locale: he })} - ${format(endDate, "d MMMM yyyy", { locale: he })}`
+          )}
         </h2>
         <button 
-          onClick={prevMonth}
+          onClick={goPrev}
           className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronLeft size={24} />

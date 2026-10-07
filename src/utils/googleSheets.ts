@@ -25,9 +25,8 @@ const parseDateStr = (dateStr: string): string | null => {
 
 const extractClasses = (text: string, grade: string): number[] => {
   const classes: number[] = [];
-  // Match the grade followed by a number 1-6 (e.g., "ט2", "יב1")
-  // We use regex to find all occurrences
-  const regex = new RegExp(`${grade}([1-6])`, "g");
+  // Match the grade followed by optional quotes/geresh and space, then a number 1-6 (e.g., "ט2", "יב 1", "י'2")
+  const regex = new RegExp(`${grade}['"״]?\\s*([1-6])`, "g");
   let match;
   while ((match = regex.exec(text)) !== null) {
     classes.push(parseInt(match[1]));
@@ -93,9 +92,6 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
     processCell(row[9], "י", "אירוע");
     processCell(row[10], "יא", "אירוע");
     processCell(row[11], "יב", "אירוע");
-    
-    // General events (תורת עציון) applies to all
-    processCell(row[12], "כללי", "אירוע");
   }
 
   return events;
