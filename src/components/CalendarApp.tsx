@@ -14,6 +14,8 @@ import {
   endOfWeek, 
   isSameMonth, 
   isSameDay,
+  isBefore,
+  startOfDay,
   parseISO
 } from "date-fns";
 import { he } from "date-fns/locale";
@@ -287,14 +289,16 @@ export default function CalendarApp() {
                 const dayEvents = filteredEvents.filter(e => e.date === dateStr);
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isToday = isSameDay(day, today);
+                const isPast = isBefore(day, startOfDay(today));
                 const hebDate = hebrewDates[dateStr];
 
                 return (
                   <div 
                     key={day.toISOString()} 
                     className={`min-h-[140px] p-2 border-b border-l border-gray-100 relative
-                      ${!isCurrentMonth ? "bg-gray-50/50" : "bg-white"}
+                      ${!isCurrentMonth ? "bg-gray-50/50" : (isPast ? "bg-gray-50/30" : "bg-white")}
                       ${idx % 7 === 0 ? "border-l-0" : ""} // Fix rightmost border in RTL
+                      ${isPast && !isToday ? "opacity-50 grayscale-[40%]" : ""}
                     `}
                   >
                     <div className="flex justify-between items-start mb-2">
@@ -348,6 +352,7 @@ export default function CalendarApp() {
               const dayEvents = filteredEvents.filter(evt => evt.date === dateStr);
               const isToday = isSameDay(day, today);
               const isCurrentMonth = isSameMonth(day, currentDate);
+              const isPast = isBefore(day, startOfDay(today));
               const hebDate = hebrewDates[dateStr];
 
               // In month view, hide empty days to save scrolling
@@ -359,7 +364,7 @@ export default function CalendarApp() {
                 <div 
                   key={day.toISOString() + "-mobile"} 
                   className={`p-3 rounded-xl border shadow-sm ${
-                    isToday ? 'border-blue-400 bg-blue-50/40' : 'border-gray-200 bg-white'
+                    isToday ? 'border-blue-400 bg-blue-50/40' : (isPast ? 'border-gray-200 bg-gray-50/50 opacity-60 grayscale-[30%]' : 'border-gray-200 bg-white')
                   }`}
                 >
                   <div className={`flex justify-between items-center ${dayEvents.length > 0 ? 'mb-2 pb-1.5 border-b border-gray-100' : ''}`}>
