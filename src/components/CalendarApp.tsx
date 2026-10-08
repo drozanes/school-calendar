@@ -128,40 +128,79 @@ export default function CalendarApp() {
     ? endOfWeek(monthEnd, { weekStartsOn: 0 })
     : endOfWeek(currentDate, { weekStartsOn: 0 });
 
+  const extractHebrewMonth = (dateStr: string) => {
+    const hebDate = hebrewDates[dateStr];
+    if (!hebDate) return null;
+    const parts = hebDate.trim().split(/\s+/);
+    if (parts.length > 1) {
+      return parts.slice(1).join(" ");
+    }
+    return hebDate;
+  };
+
+  const getHebrewSubtitle = () => {
+    const days = eachDayOfInterval({ 
+      start: viewMode === "month" ? monthStart : startDate, 
+      end: viewMode === "month" ? monthEnd : endDate 
+    });
+    
+    if (viewMode === "month") {
+       const months = new Set<string>();
+       for (const d of days) {
+          const h = extractHebrewMonth(format(d, "yyyy-MM-dd"));
+          if (h) months.add(h);
+       }
+       return Array.from(months).join(" - ");
+    } else {
+       let firstHeb = null;
+       let lastHeb = null;
+       for (const d of days) {
+          const h = hebrewDates[format(d, "yyyy-MM-dd")];
+          if (h) {
+             if (!firstHeb) firstHeb = h;
+             lastHeb = h;
+          }
+       }
+       if (firstHeb && lastHeb && firstHeb !== lastHeb) return `${firstHeb} - ${lastHeb}`;
+       return firstHeb || "";
+    }
+  };
+
+  const hebSubtitle = getHebrewSubtitle();
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
   const today = new Date();
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6">
+    <div className="max-w-6xl mx-auto p-2 md:p-4">
       {/* Header & Controls */}
-      <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-6 border border-gray-100 gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-100 p-3 rounded-full text-blue-600">
-            <CalendarIcon size={24} />
+      <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-3 rounded-2xl shadow-sm mb-4 border border-gray-100 gap-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-blue-100 p-2.5 rounded-full text-blue-600 hidden sm:block">
+            <CalendarIcon size={20} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">לוח אירועים ומבחנים</h1>
-            <p className="text-sm text-gray-500">מחצית א׳ - תשפ״ז</p>
+            <h1 className="text-xl font-bold text-gray-800">לוח אירועים ומבחנים</h1>
+            <p className="text-xs text-gray-500">מחצית א׳ - תשפ״ז</p>
           </div>
         </div>
 
         <div className="flex flex-wrap justify-center gap-3 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
           <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden shadow-sm">
             <button 
-              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === "month" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+              className={`px-3 py-1 text-sm font-medium transition-colors ${viewMode === "month" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
               onClick={() => setViewMode("month")}
             >
               חודש
             </button>
             <button 
-              className={`px-4 py-1.5 text-sm font-medium border-r border-gray-300 transition-colors ${viewMode === "week" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+              className={`px-3 py-1 text-sm font-medium border-r border-gray-300 transition-colors ${viewMode === "week" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
               onClick={() => setViewMode("week")}
             >
               שבוע
             </button>
           </div>
 
-          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
+          <label className="flex items-center gap-1.5 font-medium text-gray-700 text-sm">
             שכבה:
             <select 
               className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -171,7 +210,7 @@ export default function CalendarApp() {
               {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
+          <label className="flex items-center gap-1.5 font-medium text-gray-700 text-sm">
             כיתה:
             <select 
               className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -181,7 +220,7 @@ export default function CalendarApp() {
               {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
+          <label className="flex items-center gap-1.5 font-medium text-gray-700 text-sm">
             מסלול:
             <select 
               className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -195,23 +234,30 @@ export default function CalendarApp() {
       </div>
 
       {/* Calendar Navigation */}
-      <div className="flex justify-between items-center mb-6 px-2">
+      <div className="flex justify-between items-center mb-4 px-1">
         <button 
           onClick={goPrev}
-          className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
+          className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronRight size={24} />
         </button>
-        <h2 className="text-xl md:text-2xl font-bold text-gray-800 capitalize text-center">
-          {viewMode === "month" ? (
-            format(currentDate, "MMMM yyyy", { locale: he })
-          ) : (
-            `${format(startDate, "d MMMM", { locale: he })} - ${format(endDate, "d MMMM yyyy", { locale: he })}`
+        <div className="flex flex-col items-center">
+          <h2 className="text-lg md:text-2xl font-bold text-gray-800 capitalize text-center leading-tight">
+            {viewMode === "month" ? (
+              format(currentDate, "MMMM yyyy", { locale: he })
+            ) : (
+              `${format(startDate, "d MMMM", { locale: he })} - ${format(endDate, "d MMMM yyyy", { locale: he })}`
+            )}
+          </h2>
+          {hebSubtitle && (
+            <span className="text-sm font-medium text-gray-500 mt-0.5">
+              {hebSubtitle}
+            </span>
           )}
-        </h2>
+        </div>
         <button 
           onClick={goNext}
-          className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
+          className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronLeft size={24} />
         </button>
@@ -322,7 +368,7 @@ export default function CalendarApp() {
                         {format(day, "EEEE", { locale: he })}
                       </span>
                       <span className="text-gray-500 text-xs">
-                        {format(day, "d בMMMM", { locale: he })}
+                        {format(day, "dd/MM")}
                       </span>
                     </div>
                     {hebDate && (
