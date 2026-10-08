@@ -216,71 +216,159 @@ export default function CalendarApp() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Days of week header */}
-          <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
-            {["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"].map(day => (
-              <div key={day} className="py-3 text-center font-semibold text-gray-600 text-sm">
-                {day}
-              </div>
-            ))}
+        <>
+          {/* Desktop Calendar Grid */}
+          <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* Days of week header */}
+            <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
+              {["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"].map(day => (
+                <div key={day} className="py-3 text-center font-semibold text-gray-600 text-sm">
+                  {day}
+                </div>
+              ))}
+            </div>
+            
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 auto-rows-fr">
+              {calendarDays.map((day, idx) => {
+                const dateStr = format(day, "yyyy-MM-dd");
+                const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                const isCurrentMonth = isSameMonth(day, currentDate);
+                const isToday = isSameDay(day, today);
+
+                return (
+                  <div 
+                    key={day.toISOString()} 
+                    className={`min-h-[140px] p-2 border-b border-l border-gray-100 relative
+                      ${!isCurrentMonth ? "bg-gray-50/50" : "bg-white"}
+                      ${idx % 7 === 0 ? "border-l-0" : ""} // Fix rightmost border in RTL
+                    `}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
+                        ${isToday ? "bg-blue-600 text-white shadow-md" : (isCurrentMonth ? "text-gray-800" : "text-gray-400")}
+                      `}>
+                        {format(day, "d")}
+                      </span>
+                      {/* Hebrew date from events if exists for this day */}
+                      {dayEvents.length > 0 && dayEvents[0].hebrewDate && (
+                        <span className="text-[10px] text-gray-400">
+                          {dayEvents[0].hebrewDate}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-1.5 overflow-y-auto max-h-[180px] no-scrollbar">
+                      {dayEvents.map(evt => (
+                        <div 
+                          key={evt.id} 
+                          className={`text-xs p-1.5 rounded-md border flex items-start gap-1.5
+                            ${evt.type === "מבחן" 
+                              ? "bg-red-50 border-red-200 text-red-800" 
+                              : evt.grade === "כללי" 
+                                ? "bg-purple-50 border-purple-200 text-purple-800"
+                                : "bg-blue-50 border-blue-200 text-blue-800"
+                            }
+                          `}
+                        >
+                          <span className="mt-0.5 opacity-70 flex-shrink-0">
+                            {evt.type === "מבחן" ? <BookOpen size={12}/> : <PartyPopper size={12}/>}
+                          </span>
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="leading-tight break-words">{evt.text}</span>
+                            {!evt.tracks.includes("כללי") && (
+                              <span className="text-[9px] opacity-75 font-medium">{evt.tracks.join(", ")}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 auto-rows-fr">
+
+          {/* Mobile Calendar List View */}
+          <div className="md:hidden flex flex-col gap-3">
             {calendarDays.map((day, idx) => {
               const dateStr = format(day, "yyyy-MM-dd");
-              const dayEvents = filteredEvents.filter(e => e.date === dateStr);
-              const isCurrentMonth = isSameMonth(day, currentDate);
+              const dayEvents = filteredEvents.filter(evt => evt.date === dateStr);
               const isToday = isSameDay(day, today);
+              const isCurrentMonth = isSameMonth(day, currentDate);
+
+              // In month view, hide empty days to save scrolling
+              if (viewMode === "month" && dayEvents.length === 0) return null;
+              // In week view, hide empty days from other months if they are at the edges
+              if (viewMode === "week" && dayEvents.length === 0 && !isCurrentMonth) return null;
 
               return (
                 <div 
-                  key={day.toISOString()} 
-                  className={`min-h-[120px] p-2 border-b border-l border-gray-100 relative
-                    ${!isCurrentMonth ? "bg-gray-50/50" : "bg-white"}
-                    ${idx % 7 === 0 ? "border-l-0" : ""} // Fix rightmost border in RTL
-                  `}
+                  key={day.toISOString() + "-mobile"} 
+                  className={`p-4 rounded-xl border shadow-sm ${
+                    isToday ? 'border-blue-400 bg-blue-50/40' : 'border-gray-200 bg-white'
+                  }`}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                      ${isToday ? "bg-blue-600 text-white shadow-md" : (isCurrentMonth ? "text-gray-800" : "text-gray-400")}
-                    `}>
-                      {format(day, "d")}
-                    </span>
-                    {/* Hebrew date from events if exists for this day */}
-                    {dayEvents.length > 0 && dayEvents[0].hebrewDate && (
-                      <span className="text-xs text-gray-400 hidden sm:block">
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-bold ${isToday ? 'text-blue-700' : 'text-gray-800'}`}>
+                        {format(day, "EEEE", { locale: he })}
+                      </span>
+                      <span className="text-gray-500 text-sm">
+                        {format(day, "d בMMMM", { locale: he })}
+                      </span>
+                    </div>
+                    {dayEvents[0]?.hebrewDate && (
+                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
                         {dayEvents[0].hebrewDate}
                       </span>
                     )}
                   </div>
-                  
-                  <div className="space-y-1.5 overflow-y-auto max-h-[150px] no-scrollbar">
-                    {dayEvents.map(evt => (
-                      <div 
-                        key={evt.id} 
-                        className={`text-xs p-1.5 rounded-md border flex items-start gap-1.5
-                          ${evt.type === "מבחן" 
-                            ? "bg-red-50 border-red-200 text-red-800" 
-                            : evt.grade === "כללי" 
-                              ? "bg-purple-50 border-purple-200 text-purple-800"
-                              : "bg-blue-50 border-blue-200 text-blue-800"
-                          }
-                        `}
-                      >
-                        <span className="mt-0.5 opacity-70">
-                          {evt.type === "מבחן" ? <BookOpen size={12}/> : <PartyPopper size={12}/>}
-                        </span>
-                        <span className="leading-tight break-words">{evt.text}</span>
-                      </div>
-                    ))}
-                  </div>
+
+                  {dayEvents.length === 0 ? (
+                    <div className="text-gray-400 text-sm py-1">אין אירועים מתוכננים</div>
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      {dayEvents.map(evt => (
+                        <div 
+                          key={evt.id} 
+                          className={`p-3 rounded-xl border flex gap-3 ${
+                            evt.type === 'מבחן' 
+                              ? 'bg-red-50/50 border-red-100 text-red-900' 
+                              : evt.grade === 'כללי'
+                                ? 'bg-purple-50/50 border-purple-100 text-purple-900'
+                                : 'bg-blue-50/50 border-blue-100 text-blue-900'
+                          }`}
+                        >
+                          <div className={`mt-0.5 flex-shrink-0 p-1.5 rounded-lg ${
+                            evt.type === 'מבחן' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {evt.type === "מבחן" ? <BookOpen size={16}/> : <PartyPopper size={16}/>}
+                          </div>
+                          <div className="flex flex-col justify-center">
+                            <span className="font-semibold text-sm leading-snug">{evt.text}</span>
+                            {!evt.tracks.includes("כללי") && (
+                              <span className="text-xs opacity-75 mt-1 font-medium">{evt.tracks.join(", ")}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
+            
+            {/* If month is completely empty */}
+            {viewMode === "month" && calendarDays.every(day => filteredEvents.filter(e => e.date === format(day, "yyyy-MM-dd")).length === 0) && (
+              <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-2xl border border-gray-200 shadow-inner">
+                <CalendarIcon size={48} className="mx-auto text-gray-300 mb-3" />
+                <span className="font-medium text-lg">אין אירועים בחודש זה</span>
+                <p className="text-sm opacity-75 mt-1">נסה לשנות את סינון הכיתה או המסלול</p>
+              </div>
+            )}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
