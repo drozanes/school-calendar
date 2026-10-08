@@ -26,6 +26,7 @@ const TRACKS = ["הכל", "אור עציון", "פנמצ", "תורת עציון"
 
 export default function CalendarApp() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [hebrewDates, setHebrewDates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   
   const [selectedGrade, setSelectedGrade] = useState<string>("ט");
@@ -66,7 +67,12 @@ export default function CalendarApp() {
         const res = await fetch("/api/schedule");
         const json = await res.json();
         if (json.success) {
-          setEvents(json.data);
+          if (Array.isArray(json.data)) {
+            setEvents(json.data);
+          } else {
+            setEvents(json.data.events);
+            setHebrewDates(json.data.hebrewDates || {});
+          }
         }
       } catch (err) {
         console.error("Failed to fetch schedule", err);
@@ -139,8 +145,8 @@ export default function CalendarApp() {
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-4 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
-          <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden">
+        <div className="flex flex-wrap justify-center gap-3 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
+          <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden shadow-sm">
             <button 
               className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === "month" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
               onClick={() => setViewMode("month")}
@@ -155,30 +161,30 @@ export default function CalendarApp() {
             </button>
           </div>
 
-          <label className="flex items-center gap-2 font-medium text-gray-700">
+          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
             שכבה:
             <select 
-              className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
               value={selectedGrade} 
               onChange={e => setSelectedGrade(e.target.value)}
             >
               {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 font-medium text-gray-700">
+          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
             כיתה:
             <select 
-              className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
               value={selectedClass} 
               onChange={e => setSelectedClass(Number(e.target.value))}
             >
               {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 font-medium text-gray-700">
+          <label className="flex items-center gap-2 font-medium text-gray-700 text-sm">
             מסלול:
             <select 
-              className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
               value={selectedTrack} 
               onChange={e => setSelectedTrack(e.target.value)}
             >
@@ -196,7 +202,7 @@ export default function CalendarApp() {
         >
           <ChevronRight size={24} />
         </button>
-        <h2 className="text-2xl font-bold text-gray-800 capitalize text-center">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800 capitalize text-center">
           {viewMode === "month" ? (
             format(currentDate, "MMMM yyyy", { locale: he })
           ) : (
@@ -235,6 +241,7 @@ export default function CalendarApp() {
                 const dayEvents = filteredEvents.filter(e => e.date === dateStr);
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isToday = isSameDay(day, today);
+                const hebDate = hebrewDates[dateStr];
 
                 return (
                   <div 
@@ -250,10 +257,9 @@ export default function CalendarApp() {
                       `}>
                         {format(day, "d")}
                       </span>
-                      {/* Hebrew date from events if exists for this day */}
-                      {dayEvents.length > 0 && dayEvents[0].hebrewDate && (
+                      {hebDate && (
                         <span className="text-[10px] text-gray-400">
-                          {dayEvents[0].hebrewDate}
+                          {hebDate}
                         </span>
                       )}
                     </div>
@@ -289,13 +295,14 @@ export default function CalendarApp() {
             </div>
           </div>
 
-          {/* Mobile Calendar List View */}
-          <div className="md:hidden flex flex-col gap-3">
+          {/* Mobile Calendar List View - Compact */}
+          <div className="md:hidden flex flex-col gap-2.5">
             {calendarDays.map((day, idx) => {
               const dateStr = format(day, "yyyy-MM-dd");
               const dayEvents = filteredEvents.filter(evt => evt.date === dateStr);
               const isToday = isSameDay(day, today);
               const isCurrentMonth = isSameMonth(day, currentDate);
+              const hebDate = hebrewDates[dateStr];
 
               // In month view, hide empty days to save scrolling
               if (viewMode === "month" && dayEvents.length === 0) return null;
@@ -305,34 +312,32 @@ export default function CalendarApp() {
               return (
                 <div 
                   key={day.toISOString() + "-mobile"} 
-                  className={`p-4 rounded-xl border shadow-sm ${
+                  className={`p-3 rounded-xl border shadow-sm ${
                     isToday ? 'border-blue-400 bg-blue-50/40' : 'border-gray-200 bg-white'
                   }`}
                 >
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg font-bold ${isToday ? 'text-blue-700' : 'text-gray-800'}`}>
+                  <div className={`flex justify-between items-center ${dayEvents.length > 0 ? 'mb-2 pb-1.5 border-b border-gray-100' : ''}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-base font-bold ${isToday ? 'text-blue-700' : 'text-gray-800'}`}>
                         {format(day, "EEEE", { locale: he })}
                       </span>
-                      <span className="text-gray-500 text-sm">
+                      <span className="text-gray-500 text-xs">
                         {format(day, "d בMMMM", { locale: he })}
                       </span>
                     </div>
-                    {dayEvents[0]?.hebrewDate && (
-                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
-                        {dayEvents[0].hebrewDate}
+                    {hebDate && (
+                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {hebDate}
                       </span>
                     )}
                   </div>
 
-                  {dayEvents.length === 0 ? (
-                    <div className="text-gray-400 text-sm py-1">אין אירועים מתוכננים</div>
-                  ) : (
-                    <div className="flex flex-col gap-2.5">
+                  {dayEvents.length === 0 ? null : (
+                    <div className="flex flex-col gap-1.5">
                       {dayEvents.map(evt => (
                         <div 
                           key={evt.id} 
-                          className={`p-3 rounded-xl border flex gap-3 ${
+                          className={`p-2 rounded-lg border flex gap-2 items-center ${
                             evt.type === 'מבחן' 
                               ? 'bg-red-50/50 border-red-100 text-red-900' 
                               : evt.grade === 'כללי'
@@ -340,15 +345,15 @@ export default function CalendarApp() {
                                 : 'bg-blue-50/50 border-blue-100 text-blue-900'
                           }`}
                         >
-                          <div className={`mt-0.5 flex-shrink-0 p-1.5 rounded-lg ${
+                          <div className={`flex-shrink-0 p-1 rounded-md ${
                             evt.type === 'מבחן' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
                           }`}>
-                            {evt.type === "מבחן" ? <BookOpen size={16}/> : <PartyPopper size={16}/>}
+                            {evt.type === "מבחן" ? <BookOpen size={14}/> : <PartyPopper size={14}/>}
                           </div>
-                          <div className="flex flex-col justify-center">
-                            <span className="font-semibold text-sm leading-snug">{evt.text}</span>
+                          <div className="flex flex-col justify-center min-w-0">
+                            <span className="font-semibold text-xs leading-snug break-words">{evt.text}</span>
                             {!evt.tracks.includes("כללי") && (
-                              <span className="text-xs opacity-75 mt-1 font-medium">{evt.tracks.join(", ")}</span>
+                              <span className="text-[10px] opacity-75 font-medium">{evt.tracks.join(", ")}</span>
                             )}
                           </div>
                         </div>
@@ -361,10 +366,10 @@ export default function CalendarApp() {
             
             {/* If month is completely empty */}
             {viewMode === "month" && calendarDays.every(day => filteredEvents.filter(e => e.date === format(day, "yyyy-MM-dd")).length === 0) && (
-              <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-2xl border border-gray-200 shadow-inner">
-                <CalendarIcon size={48} className="mx-auto text-gray-300 mb-3" />
-                <span className="font-medium text-lg">אין אירועים בחודש זה</span>
-                <p className="text-sm opacity-75 mt-1">נסה לשנות את סינון הכיתה או המסלול</p>
+              <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
+                <CalendarIcon size={32} className="mx-auto text-gray-300 mb-2" />
+                <span className="font-medium text-base">אין אירועים בחודש זה</span>
+                <p className="text-xs opacity-75 mt-1">נסה לשנות את סינון הכיתה או המסלול</p>
               </div>
             )}
           </div>

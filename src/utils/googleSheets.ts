@@ -69,7 +69,7 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
   return Array.from(tracks);
 };
 
-export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
+export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], hebrewDates: Record<string, string>}> => {
   const response = await fetch(SHEET_URL, { next: { revalidate: 300 } }); // Cache for 5 mins
   const csvText = await response.text();
 
@@ -78,6 +78,7 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
   });
 
   const events: ScheduleEvent[] = [];
+  const hebrewDates: Record<string, string> = {};
   let eventIdCounter = 1;
 
   for (const row of records) {
@@ -92,6 +93,10 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
 
     const date = parseDateStr(dateStr);
     if (!date) continue;
+    
+    if (hebrewDate) {
+      hebrewDates[date] = hebrewDate;
+    }
 
     const processCell = (
       text: string,
@@ -157,5 +162,5 @@ export const fetchScheduleData = async (): Promise<ScheduleEvent[]> => {
     }
   }
 
-  return events;
+  return { events, hebrewDates };
 };
