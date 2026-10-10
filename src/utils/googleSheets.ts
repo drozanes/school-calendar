@@ -14,8 +14,7 @@ export interface ScheduleEvent {
   tracks: Track[];
 }
 
-const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1DcWGKiT67LbuzgzOAB2J7WHJL0V-EC8gFOG7VLEj_yg/gviz/tq?tqx=out:csv&sheet=מחצית%20א";
+const SHEET_URL = process.env.GOOGLE_SHEETS_URL;
 
 const parseDateStr = (dateStr: string): string | null => {
   if (!dateStr || !dateStr.includes("/")) return null;
@@ -70,6 +69,11 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
 };
 
 export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], hebrewDates: Record<string, string>}> => {
+  if (!SHEET_URL) {
+    console.warn("GOOGLE_SHEETS_URL environment variable is missing.");
+    return { events: [], hebrewDates: {} };
+  }
+
   const response = await fetch(SHEET_URL, { next: { revalidate: 300 } }); // Cache for 5 mins
   const csvText = await response.text();
 
