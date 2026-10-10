@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📅 School Calendar (לוח אירועים ומבחנים)
 
-## Getting Started
+A dynamic, responsive, and RTL-optimized school calendar application built with [Next.js](https://nextjs.org), Tailwind CSS, and `date-fns`. 
 
-First, run the development server:
+**Live Site:** [https://school-calendar.vercel.app](https://school-calendar.vercel.app)
+
+## 🌟 Features
+- **Google Sheets Integration:** Automatically fetches and parses calendar data (exams and events) directly from a Google Sheet.
+- **Advanced Filtering:** Students and teachers can filter the calendar by:
+  - **Grade (שכבה):** ט׳, י׳, י״א, י״ב
+  - **Class (כיתה):** 1-6
+  - **Track (מסלול):** אור עציון, פנמ"צ, תורת עציון
+- **Dual Views:** Seamlessly toggle between a full Month view and a focused Week view.
+- **Responsive Design:** 
+  - **Desktop:** Displays a traditional 7-column calendar grid.
+  - **Mobile:** Automatically switches to a clean, vertical list-view for easy reading on smartphones.
+- **Hebrew Dates:** Displays the corresponding Hebrew dates alongside the Gregorian dates.
+- **High Performance:** Uses Next.js caching to store the Google Sheet response for 5 minutes, ensuring instant load times and zero rate-limiting.
+
+## 🚀 Environment Setup
+To run this project locally or deploy it, you must provide the Google Sheets CSV export URL via environment variables.
+
+1. Create a `.env.local` file in the root directory (for local development) or add it to your Vercel Environment Variables (for production).
+2. Add your Google Sheets URL:
+   ```env
+   GOOGLE_SHEETS_URL="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=YOUR_SHEET_NAME"
+   ```
+
+## 🛠️ Local Development
 
 ```bash
+# Install dependencies
+npm install
+
+# Start the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Open [http://localhost:3000](http://localhost:3000) in your browser to see the calendar.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🏗️ Architecture
+- **Frontend:** React, Next.js (App Router), Tailwind CSS, Lucide Icons.
+- **Backend/API:** Next.js Route Handlers (`/api/schedule`) parse the CSV using `csv-parse` and apply custom text-recognition heuristics to categorize events by grade, class, and track.
+- **Deployment:** Vercel (Serverless Functions + Global Edge CDN).
