@@ -1,40 +1,50 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { 
   format, 
   addMonths, 
   subMonths, 
-  addWeeks,
-  subWeeks,
+  addWeeks, 
+  subWeeks, 
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
   startOfWeek, 
   endOfWeek, 
   isSameMonth, 
-  isSameDay,
-  isBefore,
-  startOfDay
+  isSameDay, 
+  isBefore, 
+  startOfDay 
 } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, BookOpen, PartyPopper } from "lucide-react";
+import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, BookOpen, PartyPopper, AlertCircle } from "lucide-react";
 import type { ScheduleEvent, Track } from "@/utils/googleSheets";
 
 const GRADES = ["ט", "י", "יא", "יב"];
 const CLASSES = [1, 2, 3, 4, 5, 6];
 const TRACKS: Array<Track | "הכל"> = ["הכל", "אור עציון", "פנמצ", "תורת עציון"];
 
+const normalizeHebrewMonth = (m: string) => {
+  const cleaned = m.trim().replace(/\s+/g, " ");
+  if (cleaned === "נ יסן") return "ניסן";
+  if (cleaned === "חשוון") return "חשון";
+  return cleaned;
+};
+
 export default function CalendarApp() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [hebrewDates, setHebrewDates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const [selectedGrade, setSelectedGrade] = useState<string>("ט");
   const [selectedClass, setSelectedClass] = useState<number>(1);
   const [selectedTrack, setSelectedTrack] = useState<Track | "הכל">("הכל");
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
+
+  const isInitialized = useRef(false);
 
   // Load saved preferences and initialize date
   useEffect(() => {
@@ -43,53 +53,98 @@ export default function CalendarApp() {
     const savedTrack = localStorage.getItem("cal_track") as Track | "הכל" | null;
     const savedView = localStorage.getItem("cal_view") as "month" | "week" | null;
 
-    Promise.resolve().then(() => {
+    queueMicrotask(() => {
       setCurrentDate(new Date());
-      if (savedGrade) setSelectedGrade(savedGrade);
-      if (savedClass) setSelectedClass(Number(savedClass));
-      if (savedTrack) setSelectedTrack(savedTrack);
-      if (savedView) setViewMode(savedView);
+      if (savedGrade && GRADES.includes(savedGrade)) setSelectedGrade(savedGrade);
+      if (savedClass && CLASSES.includes(Number(savedClass))) setSelectedClass(Number(savedClass));
+      if (savedTrack && TRACKS.includes(savedTrack)) setSelectedTrack(savedTrack);
+      if (savedView === "month" || savedView === "week") setViewMode(savedView);
+      isInitialized.current = true;
     });
   }, []);
 
-  // Save preferences when changed
+  // Save preferences when changed (guarded against initial default overwrite)
   useEffect(() => {
+    if (!isInitialized.current) return;
     localStorage.setItem("cal_grade", selectedGrade);
     localStorage.setItem("cal_class", selectedClass.toString());
     localStorage.setItem("cal_track", selectedTrack);
     localStorage.setItem("cal_view", viewMode);
   }, [selectedGrade, selectedClass, selectedTrack, viewMode]);
 
-  // Fetch data
+  // Fetch schedule data on mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch("/api/schedule");
-        const json = await res.json();
+    let ignore = false;
+    fetch("/api/schedule")
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`שגיאה בקבלת נתונים מהשרת (${res.status})`);
+        }
+        return res.json();
+      })
+      .then((json) => {
+        if (ignore) return;
         if (json.success) {
           if (Array.isArray(json.data)) {
             setEvents(json.data);
           } else {
-            setEvents(json.data.events);
+            setEvents(json.data.events || []);
             setHebrewDates(json.data.hebrewDates || {});
           }
+        } else {
+          throw new Error(json.error || "שגיאה בטעינת לוח המבחנים והאירועים");
         }
-      } catch (err) {
+      })
+      .catch((err: unknown) => {
+        if (ignore) return;
         console.error("Failed to fetch schedule", err);
-      } finally {
-        setLoading(false);
-      }
+        const message = err instanceof Error ? err.message : "שגיאה בחיבור לשרת";
+        setError(message);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
     };
-    fetchData();
   }, []);
+
+  const handleRetry = () => {
+    setLoading(true);
+    setError(null);
+    fetch("/api/schedule")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`שגיאה בקבלת נתונים מהשרת (${res.status})`);
+        return res.json();
+      })
+      .then((json) => {
+        if (json.success) {
+          if (Array.isArray(json.data)) {
+            setEvents(json.data);
+          } else {
+            setEvents(json.data.events || []);
+            setHebrewDates(json.data.hebrewDates || {});
+          }
+        } else {
+          throw new Error(json.error || "שגיאה בטעינת לוח המבחנים והאירועים");
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to fetch schedule", err);
+        const message = err instanceof Error ? err.message : "שגיאה בחיבור לשרת";
+        setError(message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
 
   // Filtering logic
   const filteredEvents = useMemo(() => {
     return events.filter((evt) => {
       // 1. Check Track
       if (selectedTrack !== "הכל") {
-        // If it has "כללי", it applies to everyone. 
-        // Otherwise, it MUST explicitly include the selected track.
         if (!evt.tracks.includes("כללי") && !evt.tracks.includes(selectedTrack)) {
           return false;
         }
@@ -99,11 +154,12 @@ export default function CalendarApp() {
       if (evt.grade === "כללי") return true;
       if (evt.grade !== selectedGrade) return false;
       
-      // It's for the selected grade. Check specific classes
-      if (evt.specificClasses.length === 0) return true; // General event for the grade
-      if (evt.specificClasses.includes(selectedClass)) return true; // Specifically for this class
+      // General event for the grade
+      if (evt.specificClasses.length === 0) return true;
+      // Specifically for this class
+      if (evt.specificClasses.includes(selectedClass)) return true;
       
-      return false; // Specifically for another class
+      return false;
     });
   }, [events, selectedTrack, selectedGrade, selectedClass]);
 
@@ -131,6 +187,10 @@ export default function CalendarApp() {
     setCurrentDate(viewMode === "month" ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));
   };
 
+  const goToday = () => {
+    setCurrentDate(new Date());
+  };
+
   // Calendar Grid generation
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -141,49 +201,49 @@ export default function CalendarApp() {
     : startOfWeek(currentDate, { weekStartsOn: 0 });
     
   const endDate = viewMode === "month" 
-    ? endOfWeek(monthEnd, { weekStartsOn: 0 })
+    ? endOfWeek(monthEnd, { weekStartsOn: 0 }) 
     : endOfWeek(currentDate, { weekStartsOn: 0 });
 
-  const extractHebrewMonth = (dateStr: string) => {
+  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+  const extractMonth = (dateStr: string) => {
     const hebDate = hebrewDates[dateStr];
     if (!hebDate) return null;
     const parts = hebDate.trim().split(/\s+/);
     if (parts.length > 1) {
-      return parts.slice(1).join(" ");
+      return normalizeHebrewMonth(parts.slice(1).join(" "));
     }
-    return hebDate;
+    return normalizeHebrewMonth(hebDate);
   };
 
   const getHebrewSubtitle = () => {
-    const days = eachDayOfInterval({ 
-      start: viewMode === "month" ? monthStart : startDate, 
-      end: viewMode === "month" ? monthEnd : endDate 
-    });
+    const days = viewMode === "month" 
+      ? eachDayOfInterval({ start: monthStart, end: monthEnd })
+      : calendarDays;
     
     if (viewMode === "month") {
-       const months = new Set<string>();
-       for (const d of days) {
-          const h = extractHebrewMonth(format(d, "yyyy-MM-dd"));
-          if (h) months.add(h);
-       }
-       return Array.from(months).join(" - ");
+      const months = new Set<string>();
+      for (const d of days) {
+        const h = extractMonth(format(d, "yyyy-MM-dd"));
+        if (h) months.add(h);
+      }
+      return Array.from(months).join(" - ");
     } else {
-       let firstHeb = null;
-       let lastHeb = null;
-       for (const d of days) {
-          const h = hebrewDates[format(d, "yyyy-MM-dd")];
-          if (h) {
-             if (!firstHeb) firstHeb = h;
-             lastHeb = h;
-          }
-       }
-       if (firstHeb && lastHeb && firstHeb !== lastHeb) return `${firstHeb} - ${lastHeb}`;
-       return firstHeb || "";
+      let firstHeb: string | null = null;
+      let lastHeb: string | null = null;
+      for (const d of days) {
+        const h = hebrewDates[format(d, "yyyy-MM-dd")];
+        if (h) {
+          if (!firstHeb) firstHeb = h;
+          lastHeb = h;
+        }
+      }
+      if (firstHeb && lastHeb && firstHeb !== lastHeb) return `${firstHeb} - ${lastHeb}`;
+      return firstHeb || "";
     }
   };
 
   const hebSubtitle = getHebrewSubtitle();
-  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
   const today = new Date();
 
   return (
@@ -201,16 +261,18 @@ export default function CalendarApp() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-3 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
-          <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden shadow-sm">
+          <div className="flex bg-white rounded-lg border border-gray-300 overflow-hidden shadow-xs">
             <button 
               className={`px-3 py-1 text-sm font-medium transition-colors ${viewMode === "month" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
               onClick={() => setViewMode("month")}
+              aria-pressed={viewMode === "month"}
             >
               חודש
             </button>
             <button 
               className={`px-3 py-1 text-sm font-medium border-r border-gray-300 transition-colors ${viewMode === "week" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
               onClick={() => setViewMode("week")}
+              aria-pressed={viewMode === "week"}
             >
               שבוע
             </button>
@@ -251,12 +313,25 @@ export default function CalendarApp() {
 
       {/* Calendar Navigation */}
       <div className="flex justify-between items-center mb-4 px-1">
-        <button 
-          onClick={goPrev}
-          className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
-        >
-          <ChevronRight size={24} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button 
+            onClick={goPrev}
+            aria-label={viewMode === "month" ? "חודש קודם" : "שבוע קודם"}
+            title={viewMode === "month" ? "חודש קודם" : "שבוע קודם"}
+            className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
+          >
+            <ChevronRight size={24} />
+          </button>
+          <button
+            onClick={goToday}
+            className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-300 hover:bg-gray-100 text-gray-700 transition-colors shadow-xs"
+            title="חזור להיום"
+            aria-label="חזור להיום"
+          >
+            היום
+          </button>
+        </div>
+
         <div className="flex flex-col items-center">
           <h2 className="text-lg md:text-2xl font-bold text-gray-800 capitalize text-center leading-tight">
             {viewMode === "month" ? (
@@ -271,13 +346,32 @@ export default function CalendarApp() {
             </span>
           )}
         </div>
+
         <button 
           onClick={goNext}
+          aria-label={viewMode === "month" ? "חודש הבא" : "שבוע הבא"}
+          title={viewMode === "month" ? "חודש הבא" : "שבוע הבא"}
           className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700 font-bold"
         >
           <ChevronLeft size={24} />
         </button>
       </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center my-4 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={handleRetry}
+            className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+          >
+            נסה שנית
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center items-center h-64">
@@ -311,7 +405,7 @@ export default function CalendarApp() {
                     key={day.toISOString()} 
                     className={`min-h-[140px] p-2 border-b border-l border-gray-100 relative
                       ${!isCurrentMonth ? "bg-gray-50/50" : (isPast ? "bg-gray-50/30" : "bg-white")}
-                      ${idx % 7 === 0 ? "border-l-0" : ""}
+                      ${idx % 7 === 6 ? "border-l-0" : ""}
                       ${isPast && !isToday ? "opacity-50 grayscale-[40%]" : ""}
                     `}
                   >
@@ -322,7 +416,7 @@ export default function CalendarApp() {
                         {format(day, "d")}
                       </span>
                       {hebDate && (
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[11px] font-medium text-gray-500">
                           {hebDate}
                         </span>
                       )}
@@ -336,7 +430,7 @@ export default function CalendarApp() {
                             ${evt.type === "מבחן" 
                               ? "bg-red-50 border-red-200 text-red-800" 
                               : evt.grade === "כללי" 
-                                ? "bg-purple-50 border-purple-200 text-purple-800"
+                                ? "bg-purple-50 border-purple-200 text-purple-800" 
                                 : "bg-blue-50 border-blue-200 text-blue-800"
                             }
                           `}
@@ -391,13 +485,15 @@ export default function CalendarApp() {
                       </span>
                     </div>
                     {hebDate && (
-                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
                         {hebDate}
                       </span>
                     )}
                   </div>
 
-                  {dayEvents.length === 0 ? null : (
+                  {dayEvents.length === 0 ? (
+                    <div className="text-xs text-gray-400 py-1">אין אירועים ביום זה</div>
+                  ) : (
                     <div className="flex flex-col gap-1.5">
                       {dayEvents.map(evt => (
                         <div 
@@ -405,8 +501,8 @@ export default function CalendarApp() {
                           className={`p-2 rounded-lg border flex gap-2 items-center ${
                             evt.type === 'מבחן' 
                               ? 'bg-red-50/50 border-red-100 text-red-900' 
-                              : evt.grade === 'כללי'
-                                ? 'bg-purple-50/50 border-purple-100 text-purple-900'
+                              : evt.grade === 'כללי' 
+                                ? 'bg-purple-50/50 border-purple-100 text-purple-900' 
                                 : 'bg-blue-50/50 border-blue-100 text-blue-900'
                           }`}
                         >

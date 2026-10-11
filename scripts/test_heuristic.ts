@@ -1,6 +1,10 @@
 import { parse } from "csv-parse/sync";
 
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/1DcWGKiT67LbuzgzOAB2J7WHJL0V-EC8gFOG7VLEj_yg/gviz/tq?tqx=out:csv&sheet=%D7%9E%D7%97%D7%A6%D7%99%D7%AA%20%D7%90";
+const SHEET_URL = process.env.GOOGLE_SHEETS_URL || "";
+if (!SHEET_URL) {
+  console.error("Please set GOOGLE_SHEETS_URL environment variable.");
+  process.exit(1);
+}
 
 async function run() {
   const response = await fetch(SHEET_URL);

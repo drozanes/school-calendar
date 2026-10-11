@@ -14,18 +14,18 @@ export interface ScheduleEvent {
   tracks: Track[];
 }
 
-const SHEET_URL = process.env.GOOGLE_SHEETS_URL;
-
 const parseDateStr = (dateStr: string): string | null => {
   if (!dateStr || !dateStr.includes("/")) return null;
-  const [day, month] = dateStr.split("/").map(Number);
+  const parts = dateStr.split("/").map(Number);
+  const day = parts[0];
+  const month = parts[1];
   if (!day || !month) return null;
 
-  // Dynamically determine academic year based on current system date:
-  // An academic year runs from August of baseYear to July of baseYear + 1.
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const baseYear = now.getMonth() >= 7 ? currentYear : currentYear - 1;
+  // The spreadsheet is explicitly anchored to the תשפ"ז academic year (2026-2027).
+  // Allow an optional ACADEMIC_BASE_YEAR env override, defaulting to 2026.
+  const baseYear = process.env.ACADEMIC_BASE_YEAR 
+    ? parseInt(process.env.ACADEMIC_BASE_YEAR, 10) 
+    : 2026;
   const year = month >= 8 ? baseYear : baseYear + 1;
 
   return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
@@ -33,11 +33,11 @@ const parseDateStr = (dateStr: string): string | null => {
 
 const extractClasses = (text: string): number[] => {
   const classes = new Set<number>();
-  // Match any isolated digit from 1-6
-  const regex = /(?<!\d)([1-6])(?!\d)/g;
+  // Match isolated digit 1-6, ensuring it's not part of a timestamp (e.g. 11:00 or 2:00) or date slash
+  const regex = /(?<![\d:])([1-6])(?![\d:])/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
-    classes.add(parseInt(match[1]));
+    classes.add(parseInt(match[1], 10));
   }
   return Array.from(classes);
 };
@@ -47,7 +47,13 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
   
   const tracks = new Set<Track>();
   
-  if (text.includes('תוצ') || text.includes('תו"צ') || text.includes('תו״צ') || text.includes('תורת עציון')) {
+  // Match "תוצ", "תו"צ", "תו״צ", "תורת עציון" ensuring "תוצ" is not part of another word like "תוצאות"
+  if (
+    /(?:^|[^\p{L}])(?:תוצ|תו["״]צ|תורת עציון)(?:[^\p{L}]|$)/u.test(text) ||
+    text.includes('תו"צ') || 
+    text.includes('תו״צ') || 
+    text.includes('תורת עציון')
+  ) {
     tracks.add("תורת עציון");
   }
   
@@ -57,12 +63,12 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
     tracks.add("פנמצ");
   }
   
-  // If it just says פנימיה, it is ONLY for אור עציון, not פנמצ
-  if (text.includes('פנימיה')) {
+  // Support both פנימיה and פנימייה
+  if (/פנימיי?ה/.test(text)) {
     tracks.add("אור עציון");
   }
 
-  // If it specifically mentions פנמצ, add it
+  // If it specifically mentions פנמצ
   if (text.includes('פנמצ') || text.includes('פנמ"צ') || text.includes('פנמ״צ')) {
     tracks.add("פנמצ");
   }
@@ -97,10 +103,20 @@ const parseCsvRows = (
       hebrewDates[date] = hebrewDate;
     }
 
+    const isVacationOrEvent = (text: string) => {
+      // Explicit markers from coordinator: (ח) = vacation/holiday, (א) = event
+      if (text.includes("(ח)") || text.includes("(א)")) return true;
+      // Shabbat is never an academic exam
+      if (dayOfWeek === "שבת") return true;
+      // Vacations, holidays, educational trips, courses, and assemblies
+      if (/חופש|חופשת|ערב|צום|שבת|מסע|מד"א|הכתרה|גיבוש|טקס|אסיפת הורים|סיור/.test(text)) return true;
+      return false;
+    };
+
     const processCell = (
       text: string,
       grade: "ט" | "י" | "יא" | "יב" | "כללי",
-      type: "מבחן" | "אירוע",
+      defaultType: "מבחן" | "אירוע",
       isCol12: boolean = false
     ) => {
       if (!text) return;
@@ -109,6 +125,13 @@ const parseCsvRows = (
       for (const line of lines) {
         const specificClasses = grade !== "כללי" ? extractClasses(line) : [];
         const tracks = determineTracks(line, isCol12);
+        
+        let type = defaultType;
+        if (defaultType === "מבחן" && isVacationOrEvent(line)) {
+          type = "אירוע";
+        } else if (line.includes("(ב)")) {
+          type = "מבחן";
+        }
         
         events.push({
           id: `evt-${idCounter.current++}`,
@@ -163,43 +186,46 @@ const parseCsvRows = (
 };
 
 export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], hebrewDates: Record<string, string>}> => {
-  if (!SHEET_URL) {
+  const sheetUrl = process.env.GOOGLE_SHEETS_URL;
+  if (!sheetUrl) {
     console.warn("GOOGLE_SHEETS_URL environment variable is missing.");
     return { events: [], hebrewDates: {} };
   }
 
   // Construct URLs for both semester tabs
-  let urls = [SHEET_URL];
+  let urls = [sheetUrl];
   try {
-    const urlA = new URL(SHEET_URL);
+    const urlA = new URL(sheetUrl);
     urlA.searchParams.set("sheet", "מחצית א");
-    const urlB = new URL(SHEET_URL);
+    const urlB = new URL(sheetUrl);
     urlB.searchParams.set("sheet", "מחצית ב");
     urls = [urlA.toString(), urlB.toString()];
   } catch (err) {
-    console.warn("Could not construct dual semester URLs, using single SHEET_URL", err);
+    console.warn("Could not construct dual semester URLs, using single sheetUrl", err);
   }
 
   const events: ScheduleEvent[] = [];
   const hebrewDates: Record<string, string> = {};
   const idCounter = { current: 1 };
 
-  await Promise.all(
-    urls.map(async (url) => {
-      try {
-        const response = await fetch(url, { next: { revalidate: 300 } });
-        if (!response.ok) {
-          console.warn(`Failed to fetch sheet from ${url}: ${response.statusText}`);
-          return;
-        }
-        const csvText = await response.text();
-        const records = parse(csvText, { skip_empty_lines: true });
-        parseCsvRows(records, events, hebrewDates, idCounter);
-      } catch (err) {
-        console.error(`Error processing sheet from ${url}:`, err);
+  // Fetch and parse semesters sequentially in order (Semester A then Semester B)
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { next: { revalidate: 300 } });
+      if (!response.ok) {
+        console.warn(`Failed to fetch sheet from ${url}: ${response.statusText}`);
+        continue;
       }
-    })
-  );
+      const csvText = await response.text();
+      const records = parse(csvText, { skip_empty_lines: true });
+      parseCsvRows(records, events, hebrewDates, idCounter);
+    } catch (err) {
+      console.error(`Error processing sheet from ${url}:`, err);
+    }
+  }
+
+  // Ensure deterministic chronological ordering
+  events.sort((a, b) => a.date.localeCompare(b.date));
 
   return { events, hebrewDates };
 };

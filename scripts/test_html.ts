@@ -1,5 +1,9 @@
 async function run() {
-  const url = "https://docs.google.com/spreadsheets/d/1DcWGKiT67LbuzgzOAB2J7WHJL0V-EC8gFOG7VLEj_yg/pubhtml?gid=0&single=true";
+  const url = process.env.GOOGLE_SHEETS_URL || "";
+  if (!url) {
+    console.error("Please set GOOGLE_SHEETS_URL environment variable.");
+    process.exit(1);
+  }
   const res = await fetch(url);
   const text = await res.text();
   const index = text.indexOf("חרבות ברזל");
