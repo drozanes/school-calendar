@@ -20,8 +20,14 @@ const parseDateStr = (dateStr: string): string | null => {
   if (!dateStr || !dateStr.includes("/")) return null;
   const [day, month] = dateStr.split("/").map(Number);
   if (!day || !month) return null;
-  // Assume August to December is 2026, January to July is 2027
-  const year = month >= 8 ? 2026 : 2027;
+
+  // Dynamically determine academic year based on current system date:
+  // An academic year runs from August of baseYear to July of baseYear + 1.
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const baseYear = now.getMonth() >= 7 ? currentYear : currentYear - 1;
+  const year = month >= 8 ? baseYear : baseYear + 1;
+
   return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   format, 
   addMonths, 
@@ -15,16 +15,15 @@ import {
   isSameMonth, 
   isSameDay,
   isBefore,
-  startOfDay,
-  parseISO
+  startOfDay
 } from "date-fns";
 import { he } from "date-fns/locale";
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, BookOpen, PartyPopper } from "lucide-react";
-import type { ScheduleEvent } from "@/utils/googleSheets";
+import type { ScheduleEvent, Track } from "@/utils/googleSheets";
 
 const GRADES = ["ט", "י", "יא", "יב"];
 const CLASSES = [1, 2, 3, 4, 5, 6];
-const TRACKS = ["הכל", "אור עציון", "פנמצ", "תורת עציון"];
+const TRACKS: Array<Track | "הכל"> = ["הכל", "אור עציון", "פנמצ", "תורת עציון"];
 
 export default function CalendarApp() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
@@ -33,25 +32,24 @@ export default function CalendarApp() {
   
   const [selectedGrade, setSelectedGrade] = useState<string>("ט");
   const [selectedClass, setSelectedClass] = useState<number>(1);
-  const [selectedTrack, setSelectedTrack] = useState<string>("הכל");
+  const [selectedTrack, setSelectedTrack] = useState<Track | "הכל">("הכל");
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
 
-  // Initialize date on mount (fixes prerender error)
-  useEffect(() => {
-    setCurrentDate(new Date());
-  }, []);
-
-  // Load saved preferences
+  // Load saved preferences and initialize date
   useEffect(() => {
     const savedGrade = localStorage.getItem("cal_grade");
     const savedClass = localStorage.getItem("cal_class");
-    const savedTrack = localStorage.getItem("cal_track");
-    const savedView = localStorage.getItem("cal_view") as "month" | "week";
-    if (savedGrade) setSelectedGrade(savedGrade);
-    if (savedClass) setSelectedClass(Number(savedClass));
-    if (savedTrack) setSelectedTrack(savedTrack);
-    if (savedView) setViewMode(savedView);
+    const savedTrack = localStorage.getItem("cal_track") as Track | "הכל" | null;
+    const savedView = localStorage.getItem("cal_view") as "month" | "week" | null;
+
+    Promise.resolve().then(() => {
+      setCurrentDate(new Date());
+      if (savedGrade) setSelectedGrade(savedGrade);
+      if (savedClass) setSelectedClass(Number(savedClass));
+      if (savedTrack) setSelectedTrack(savedTrack);
+      if (savedView) setViewMode(savedView);
+    });
   }, []);
 
   // Save preferences when changed
@@ -86,26 +84,42 @@ export default function CalendarApp() {
   }, []);
 
   // Filtering logic
-  const filteredEvents = events.filter((evt) => {
-    // 1. Check Track
-    if (selectedTrack !== "הכל") {
-      // If it has "כללי", it applies to everyone. 
-      // Otherwise, it MUST explicitly include the selected track.
-      if (!evt.tracks.includes("כללי") && !evt.tracks.includes(selectedTrack as any)) {
-        return false;
+  const filteredEvents = useMemo(() => {
+    return events.filter((evt) => {
+      // 1. Check Track
+      if (selectedTrack !== "הכל") {
+        // If it has "כללי", it applies to everyone. 
+        // Otherwise, it MUST explicitly include the selected track.
+        if (!evt.tracks.includes("כללי") && !evt.tracks.includes(selectedTrack)) {
+          return false;
+        }
+      }
+
+      // 2. Check Grade & Class
+      if (evt.grade === "כללי") return true;
+      if (evt.grade !== selectedGrade) return false;
+      
+      // It's for the selected grade. Check specific classes
+      if (evt.specificClasses.length === 0) return true; // General event for the grade
+      if (evt.specificClasses.includes(selectedClass)) return true; // Specifically for this class
+      
+      return false; // Specifically for another class
+    });
+  }, [events, selectedTrack, selectedGrade, selectedClass]);
+
+  // Group events by date for O(1) lookups during rendering
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, ScheduleEvent[]>();
+    for (const evt of filteredEvents) {
+      const list = map.get(evt.date);
+      if (list) {
+        list.push(evt);
+      } else {
+        map.set(evt.date, [evt]);
       }
     }
-
-    // 2. Check Grade & Class
-    if (evt.grade === "כללי") return true;
-    if (evt.grade !== selectedGrade) return false;
-    
-    // It's for the selected grade. Check specific classes
-    if (evt.specificClasses.length === 0) return true; // General event for the grade
-    if (evt.specificClasses.includes(selectedClass)) return true; // Specifically for this class
-    
-    return false; // Specifically for another class
-  });
+    return map;
+  }, [filteredEvents]);
 
   if (!currentDate) return null;
 
@@ -227,7 +241,7 @@ export default function CalendarApp() {
             <select 
               className="bg-white border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
               value={selectedTrack} 
-              onChange={e => setSelectedTrack(e.target.value)}
+              onChange={e => setSelectedTrack(e.target.value as Track | "הכל")}
             >
               {TRACKS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -286,7 +300,7 @@ export default function CalendarApp() {
             <div className="grid grid-cols-7 auto-rows-fr">
               {calendarDays.map((day, idx) => {
                 const dateStr = format(day, "yyyy-MM-dd");
-                const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                const dayEvents = eventsByDate.get(dateStr) || [];
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isToday = isSameDay(day, today);
                 const isPast = isBefore(day, startOfDay(today));
@@ -297,7 +311,7 @@ export default function CalendarApp() {
                     key={day.toISOString()} 
                     className={`min-h-[140px] p-2 border-b border-l border-gray-100 relative
                       ${!isCurrentMonth ? "bg-gray-50/50" : (isPast ? "bg-gray-50/30" : "bg-white")}
-                      ${idx % 7 === 0 ? "border-l-0" : ""} // Fix rightmost border in RTL
+                      ${idx % 7 === 0 ? "border-l-0" : ""}
                       ${isPast && !isToday ? "opacity-50 grayscale-[40%]" : ""}
                     `}
                   >
@@ -347,9 +361,9 @@ export default function CalendarApp() {
 
           {/* Mobile Calendar List View - Compact */}
           <div className="md:hidden flex flex-col gap-2.5">
-            {calendarDays.map((day, idx) => {
+            {calendarDays.map((day) => {
               const dateStr = format(day, "yyyy-MM-dd");
-              const dayEvents = filteredEvents.filter(evt => evt.date === dateStr);
+              const dayEvents = eventsByDate.get(dateStr) || [];
               const isToday = isSameDay(day, today);
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isPast = isBefore(day, startOfDay(today));
@@ -416,7 +430,7 @@ export default function CalendarApp() {
             })}
             
             {/* If month is completely empty */}
-            {viewMode === "month" && calendarDays.every(day => filteredEvents.filter(e => e.date === format(day, "yyyy-MM-dd")).length === 0) && (
+            {viewMode === "month" && calendarDays.every(day => !eventsByDate.has(format(day, "yyyy-MM-dd"))) && (
               <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
                 <CalendarIcon size={32} className="mx-auto text-gray-300 mb-2" />
                 <span className="font-medium text-base">אין אירועים בחודש זה</span>
