@@ -68,23 +68,12 @@ const determineTracks = (text: string, isCol12: boolean = false): Track[] => {
   return Array.from(tracks);
 };
 
-export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], hebrewDates: Record<string, string>}> => {
-  if (!SHEET_URL) {
-    console.warn("GOOGLE_SHEETS_URL environment variable is missing.");
-    return { events: [], hebrewDates: {} };
-  }
-
-  const response = await fetch(SHEET_URL, { next: { revalidate: 300 } }); // Cache for 5 mins
-  const csvText = await response.text();
-
-  const records = parse(csvText, {
-    skip_empty_lines: true,
-  });
-
-  const events: ScheduleEvent[] = [];
-  const hebrewDates: Record<string, string> = {};
-  let eventIdCounter = 1;
-
+const parseCsvRows = (
+  records: string[][],
+  events: ScheduleEvent[],
+  hebrewDates: Record<string, string>,
+  idCounter: { current: number }
+) => {
   for (const row of records) {
     const dayOfWeek = row[0]?.trim();
     const hebrewDate = row[1]?.trim();
@@ -116,7 +105,7 @@ export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], heb
         const tracks = determineTracks(line, isCol12);
         
         events.push({
-          id: `evt-${eventIdCounter++}`,
+          id: `evt-${idCounter.current++}`,
           date,
           dayOfWeek,
           hebrewDate,
@@ -165,6 +154,46 @@ export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], heb
       processCell(toratEtzion, "כללי", "אירוע", true);
     }
   }
+};
+
+export const fetchScheduleData = async (): Promise<{events: ScheduleEvent[], hebrewDates: Record<string, string>}> => {
+  if (!SHEET_URL) {
+    console.warn("GOOGLE_SHEETS_URL environment variable is missing.");
+    return { events: [], hebrewDates: {} };
+  }
+
+  // Construct URLs for both semester tabs
+  let urls = [SHEET_URL];
+  try {
+    const urlA = new URL(SHEET_URL);
+    urlA.searchParams.set("sheet", "מחצית א");
+    const urlB = new URL(SHEET_URL);
+    urlB.searchParams.set("sheet", "מחצית ב");
+    urls = [urlA.toString(), urlB.toString()];
+  } catch (err) {
+    console.warn("Could not construct dual semester URLs, using single SHEET_URL", err);
+  }
+
+  const events: ScheduleEvent[] = [];
+  const hebrewDates: Record<string, string> = {};
+  const idCounter = { current: 1 };
+
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const response = await fetch(url, { next: { revalidate: 300 } });
+        if (!response.ok) {
+          console.warn(`Failed to fetch sheet from ${url}: ${response.statusText}`);
+          return;
+        }
+        const csvText = await response.text();
+        const records = parse(csvText, { skip_empty_lines: true });
+        parseCsvRows(records, events, hebrewDates, idCounter);
+      } catch (err) {
+        console.error(`Error processing sheet from ${url}:`, err);
+      }
+    })
+  );
 
   return { events, hebrewDates };
 };

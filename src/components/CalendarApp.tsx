@@ -182,7 +182,7 @@ export default function CalendarApp() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-800">לוח אירועים ומבחנים</h1>
-            <p className="text-xs text-gray-500">מחצית א׳ - תשפ״ז</p>
+            <p className="text-xs text-gray-500">שנת תשפ״ז</p>
           </div>
         </div>
 
